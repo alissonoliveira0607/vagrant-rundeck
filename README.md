@@ -11,8 +11,8 @@ Este repositório contém scripts para automatizar a configuração do Rundeck e
 
 - Clone este repositório, navegue até o diretório e inicie a VM:
 
-   ```bash
-    git clone https://exemplo.com/repo.git
-    cd repo
-    vagrant up
-    ```
+```bash
+git clone https://exemplo.com/repo.git
+cd repo
+vagrant up
+```
