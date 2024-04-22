@@ -2,13 +2,13 @@
 
 USER="rundeck"
 SSH_KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDbC7fGQkGTjXERSAwLq7co5QXvahoXdG93m/Zx/+W1v+eme1ZohTCyi41MkcAJDr2KHSibwo6PE7WWjgYFAsZg/PNE6igI0D5VzC63T48tsK6ffxGFYy3rl0B/VyvHdfqe/vcw44zn6HRjF2q01DXV2NeSBZuJL+diclAcB+2jhrjha9iHWxxkJuxwFl76bAfhVdtNE6yC0It+aUtJLPT1ppcviGKpIyN1w6pGvWxk1pV+Pf6CdqU1FK05FeSPK+f34bSgIOin/DCNN6oBFgX2V5H/+Gf290bmlT9YGVSNZ0Y/HCK3Cetl3A+1j4YtbyANA3ju5mWeKeG8svzfphVRuOlKtwL+pVSrcnJuLIJqf4Nsq3PBAaPt9xzHk5vkmVfaMftQU0OXrgYhP2455SuuhpJe4LG3uyncRAXCK1AX7OoDI5jY6C4pZM00Vv+FOu5BYZLn28vr73B/rHBMzjnOCiouLbrYiCSL9VGtLcPTx4haoTWbm7fZSakyUhITI6M= alissonoliveira@ALISSON"
-PACKAGES="openjdk-11-jre-headless curl jq net-tools shfmt"
+PACKAGES="openjdk-11-jre-headless curl jq net-tools mysql-server"
 
 sudo cp /etc/apt/trusted.gpg trusted.gpg.d/
 
 echo "Atualizando pacotes..."
 sudo apt update -y
-so apt install -y ${PACKAGES}
+sudo apt install -y $PACKAGES
 
 if ! grep -q -i "$SSH_KEY" /home/vagrant/.ssh/authorized_keys; then
     echo "Escrevendo a chave ssh no arquivo authorized_keys"
@@ -60,6 +60,54 @@ sudo bash -c 'echo "deb-src https://packages.rundeck.com/pagerduty/rundeck/any/ 
 echo "Atualizando pacotes e instalando o rundeck..."
 sudo apt update -y
 sudo apt install -y rundeck
+
+sudo cat <<EOF | sudo tee /etc/rundeck/rundeck-config.properties
+#loglevel.default is the default log level for jobs: ERROR,WARN,INFO,VERBOSE,DEBUG
+loglevel.default=INFO
+rdeck.base=/var/lib/rundeck
+
+#rss.enabled if set to true enables RSS feeds that are public (non-authenticated)
+rss.enabled=false
+# change hostname here
+grails.serverURL=http://localhost:4440  # -> Hostname ou DNS do Rundeck
+#dataSource.dbCreate = none
+#dataSource.url = jdbc:h2:file:/var/lib/rundeck/data/rundeckdb;DB_CLOSE_ON_EXIT=FALSE;NON_KEYWORDS=MONTH,HOUR,MINUTE,YEAR,SECONDS
+#grails.plugin.databasemigration.updateOnStart=true
+
+# Encryption for key storage
+rundeck.storage.provider.1.type=db
+rundeck.storage.provider.1.path=keys
+
+rundeck.storage.converter.1.type=jasypt-encryption
+rundeck.storage.converter.1.path=keys
+rundeck.storage.converter.1.config.encryptorType=custom
+rundeck.storage.converter.1.config.password=57233fbd67c4f60a
+rundeck.storage.converter.1.config.algorithm=PBEWITHSHA256AND128BITAES-CBC-BC
+rundeck.storage.converter.1.config.provider=BC
+
+# Encryption for project config storage
+rundeck.projectsStorageType=db
+
+rundeck.config.storage.converter.1.type=jasypt-encryption
+rundeck.config.storage.converter.1.path=projects
+rundeck.config.storage.converter.1.config.password=57233fbd67c4f60a
+rundeck.config.storage.converter.1.config.encryptorType=custom
+rundeck.config.storage.converter.1.config.algorithm=PBEWITHSHA256AND128BITAES-CBC-BC
+rundeck.config.storage.converter.1.config.provider=BC
+
+rundeck.feature.repository.enabled=true
+
+# DATABASE CONFIGS  # Configurações do driver jdbc que será utilizado
+dataSource.driverClassName = org.mariadb.jdbc.Driver
+dataSource.url = jdbc:mysql://localhost/rundeck?autoReconnect=true&useSSL=false
+dataSource.username = rundeck
+dataSource.password = devops
+EOF
+
+echo "Configurando o database do Rundeck"
+sudo mysql -e "create database rundeck;"
+sudo mysql -e "create user 'rundeck'@'%' identified by 'devops';"
+sudo mysql -e "grant ALL on rundeck.* to 'rundeck'@'%';"
 
 export IP=$(hostname -I | awk '{print $2}')
 
