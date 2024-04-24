@@ -4,7 +4,22 @@ USER="rundeck"
 SSH_KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDbC7fGQkGTjXERSAwLq7co5QXvahoXdG93m/Zx/+W1v+eme1ZohTCyi41MkcAJDr2KHSibwo6PE7WWjgYFAsZg/PNE6igI0D5VzC63T48tsK6ffxGFYy3rl0B/VyvHdfqe/vcw44zn6HRjF2q01DXV2NeSBZuJL+diclAcB+2jhrjha9iHWxxkJuxwFl76bAfhVdtNE6yC0It+aUtJLPT1ppcviGKpIyN1w6pGvWxk1pV+Pf6CdqU1FK05FeSPK+f34bSgIOin/DCNN6oBFgX2V5H/+Gf290bmlT9YGVSNZ0Y/HCK3Cetl3A+1j4YtbyANA3ju5mWeKeG8svzfphVRuOlKtwL+pVSrcnJuLIJqf4Nsq3PBAaPt9xzHk5vkmVfaMftQU0OXrgYhP2455SuuhpJe4LG3uyncRAXCK1AX7OoDI5jY6C4pZM00Vv+FOu5BYZLn28vr73B/rHBMzjnOCiouLbrYiCSL9VGtLcPTx4haoTWbm7fZSakyUhITI6M= alissonoliveira@ALISSON"
 PACKAGES="openjdk-11-jre-headless curl jq net-tools mysql-server"
 
-sudo cp /etc/apt/trusted.gpg trusted.gpg.d/
+#correção temporária
+#sudo cp /etc/apt/trusted.gpg trusted.gpg.d/
+
+# Desativa a swap temporariamente
+#sudo swapoff -a
+
+# Remove a entrada da swap do arquivo /etc/fstab
+#sudo sed -i '/\/swap.img/d' /etc/fstab
+
+# Comentando a configuração da swap no fstab
+sudo sed -i 's/^\([^#]*\bswap\b\)/#\1/g' /etc/fstab
+
+echo "Desabilitando a swap"
+sudo swapoff -a
+
+
 
 echo "Atualizando pacotes..."
 sudo apt update -y
@@ -61,7 +76,7 @@ echo "Atualizando pacotes e instalando o rundeck..."
 sudo apt update -y
 sudo apt install -y rundeck
 
-sudo cat <<EOF | sudo tee /etc/rundeck/rundeck-config.properties
+sudo cat <<EOF > /etc/rundeck/rundeck-config.properties
 #loglevel.default is the default log level for jobs: ERROR,WARN,INFO,VERBOSE,DEBUG
 loglevel.default=INFO
 rdeck.base=/var/lib/rundeck
@@ -69,7 +84,7 @@ rdeck.base=/var/lib/rundeck
 #rss.enabled if set to true enables RSS feeds that are public (non-authenticated)
 rss.enabled=false
 # change hostname here
-grails.serverURL=http://localhost:4440  # -> Hostname ou DNS do Rundeck
+grails.serverURL=http://localhost:4440
 #dataSource.dbCreate = none
 #dataSource.url = jdbc:h2:file:/var/lib/rundeck/data/rundeckdb;DB_CLOSE_ON_EXIT=FALSE;NON_KEYWORDS=MONTH,HOUR,MINUTE,YEAR,SECONDS
 #grails.plugin.databasemigration.updateOnStart=true
@@ -81,7 +96,7 @@ rundeck.storage.provider.1.path=keys
 rundeck.storage.converter.1.type=jasypt-encryption
 rundeck.storage.converter.1.path=keys
 rundeck.storage.converter.1.config.encryptorType=custom
-rundeck.storage.converter.1.config.password=57233fbd67c4f60a
+rundeck.storage.converter.1.config.password=3b0402e8af2cc75b
 rundeck.storage.converter.1.config.algorithm=PBEWITHSHA256AND128BITAES-CBC-BC
 rundeck.storage.converter.1.config.provider=BC
 
@@ -90,14 +105,14 @@ rundeck.projectsStorageType=db
 
 rundeck.config.storage.converter.1.type=jasypt-encryption
 rundeck.config.storage.converter.1.path=projects
-rundeck.config.storage.converter.1.config.password=57233fbd67c4f60a
+rundeck.config.storage.converter.1.config.password=3b0402e8af2cc75b
 rundeck.config.storage.converter.1.config.encryptorType=custom
 rundeck.config.storage.converter.1.config.algorithm=PBEWITHSHA256AND128BITAES-CBC-BC
 rundeck.config.storage.converter.1.config.provider=BC
 
 rundeck.feature.repository.enabled=true
 
-# DATABASE CONFIGS  # Configurações do driver jdbc que será utilizado
+# CONFIGS DATABASE
 dataSource.driverClassName = org.mariadb.jdbc.Driver
 dataSource.url = jdbc:mysql://localhost/rundeck?autoReconnect=true&useSSL=false
 dataSource.username = rundeck
@@ -112,12 +127,19 @@ sudo mysql -e "grant ALL on rundeck.* to 'rundeck'@'%';"
 export IP=$(hostname -I | awk '{print $2}')
 
 echo "Atualizando as configurações do Rundeck"
-sudo sed -i "s/localhost/$(echo $IP)/" /etc/rundeck/rundeck-config.properties
+#sudo sed -i "s/localhost/$(echo $IP)/" /etc/rundeck/rundeck-config.properties
+sudo sed -i "s|grails.serverURL=http://localhost:4440|grails.serverURL=http://$(echo $IP):4440|" /etc/rundeck/rundeck-config.properties
+
+echo "Habilitando o mysql"
+sudo systemctl enable mysql
+
+echo "Reiniciando o serviço do mysql"
+sudo systemctl restart mysql
+
+sudo echo -n 'RDECK_JVM_SETTINGS="$RDECK_JVM_SETTINGS -Xmx4096m -Xms1024m"' >> /etc/default/rundeckd
 
 echo "Habilitando o serviço do rundeck..."
 sudo systemctl enable rundeckd --now
 
 sudo systemctl daemon-reload
-sudo service rundeckd start
-
-
+sudo service rundeckd restart
